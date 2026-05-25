@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>IMS 2026｜現場 Check-in</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96A;
+    --black: #050508;
+    --deep: #090910;
+    --surface: #111118;
+    --surface2: #1A1A24;
+    --text: #F0EDE8;
+    --muted: #7A7585;
+    --border: rgba(201,168,76,0.2);
+    --success: #4CAF84;
+    --error: #E85C5C;
+    --warning: #E8A84C;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  body {
+    background: var(--deep);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--black);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 3px; color: var(--gold);
+    text-transform: uppercase;
+  }
+  .header-count {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .count-badge {
+    background: rgba(201,168,76,0.1);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: var(--gold);
+  }
+  .count-label { font-size: 10px; color: var(--muted); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    background: var(--black);
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    flex: 1; padding: 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--muted); background: none; border: none;
+    cursor: pointer; transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+  }
+  .tab.active {
+    color: var(--gold);
+    border-bottom-color: var(--gold);
+    background: rgba(201,168,76,0.03);
+  }
+
+  /* ── PAGES ── */
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── SCANNER PAGE ── */
+  .scanner-wrap {
+    padding: 20px;
+  }
+
+  .scanner-box {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  #qr-reader {
+    width: 100% !important;
+  }
+  #qr-reader video {
+    width: 100% !important;
+    border-radius: 0 !important;
+  }
+  #qr-reader img { display: none !important; }
+  #qr-reader__scan_region { background: transparent !important; }
+  #qr-reader__dashboard { display: none !important; }
+
+  /* Scanner overlay */
+  .scan-overlay {
+    position: absolute; inset: 0;
+    pointer-events: none; z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .scan-frame {
+    width: 200px; height: 200px;
+    position: relative;
+  }
+  .scan-corner {
+    position: absolute;
+    width: 24px; height: 24px;
+    border-color: var(--gold);
+    border-style: solid;
+  }
+  .scan-corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; }
+  .scan-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; }
+  .scan-corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
+  .scan-corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+
+  .scan-line {
+    position: absolute; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    animation: scan-move 2s ease-in-out infinite;
+    top: 0;
+  }
+  @keyframes scan-move {
+    0% { top: 0; opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 1; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  .scanner-hint {
+    text-align: center; padding: 12px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* Scan start button */
+  .btn-scan-start {
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(135deg, var(--gold), #8B6914);
+    color: var(--black);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px; letter-spacing: 2px; font-weight: 700;
+    text-transform: uppercase; border: none; cursor: pointer;
+    transition: opacity 0.2s; margin-bottom: 16px;
+  }
+  .btn-scan-start:active { opacity: 0.8; }
+
+  .btn-scan-stop {
+    width: 100%; padding: 14px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; letter-spacing: 2px;
+    text-transform: uppercase; border: 1px solid var(--border);
+    cursor: pointer; margin-bottom: 16px;
+  }
+
+  /* Manual input */
+  .manual-section {
+    margin-top: 8px;
+  }
+  .manual-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 2px; color: var(--muted);
+    text-transform: uppercase; margin-bottom: 8px; display: block;
+  }
+  .manual-row {
+    display: flex; gap: 8px;
+  }
+  .manual-input {
+    flex: 1; padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text); font-size: 14px;
+    font-family: 'Noto Sans TC', sans-serif;
+    outline: none;
+  }
+  .manual-input:focus { border-color: var(--gold); }
+  .manual-btn {
+    padding: 12px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--gold);
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; cursor: pointer;
+  }
+  .manual-btn:active { background: rgba(201,168,76,0.1); }
+
+  /* ── RESULT OVERLAY ── */
+  #result-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(5,5,8,0.96);
+    backdrop-filter: blur(16px);
+    align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  #result-overlay.show { display: flex; }
+
+  .result-card {
+    width: 100%; max-width: 380px;
+    position: relative;
+  }
+
+  /* Success card */
+  .result-card.success .result-top {
+    background: var(--surface);
+    border: 1px solid rgba(76,175,132,0.4);
+    border-bottom: none;
+    padding: 32px 28px 24px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .result-card.success .result-top::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--success), #6FCFA4, var(--success));
+  }
+
+  /* Error card */
+  .result-card.error .result-top {
+    background: var(--surface);
+    border: 1px solid rgba(232,92,92,0.4);
+    border-bottom: none;
+    padding: 32px 28px 24px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .result-card.error .result-top::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--error), #F07070, var(--error));
+  }
+
+  /* Already checked */
+  .result-card.warning .result-top {
+    background: var(--surface);
+    border: 1px solid rgba(232,168,76,0.4);
+    border-bottom: none;
+    padding: 32px 28px 24px;
+    text-align: center;
+    position: relative; overflow: hidden;
+  }
+  .result-card.warning .result-top::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--warning), #F0C070, var(--warning));
+  }
+
+  .result-status-icon {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 16px; font-size: 28px;
+  }
+  .success .result-status-icon { background: rgba(76,175,132,0.1); border: 2px solid rgba(76,175,132,0.3); }
+  .error   .result-status-icon { background: rgba(232,92,92,0.1);  border: 2px solid rgba(232,92,92,0.3); }
+  .warning .result-status-icon { background: rgba(232,168,76,0.1); border: 2px solid rgba(232,168,76,0.3); }
+
+  .result-status-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 3px; text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+  .success .result-status-text { color: var(--success); }
+  .error   .result-status-text { color: var(--error); }
+  .warning .result-status-text { color: var(--warning); }
+
+  .result-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 28px; font-weight: 900;
+    color: var(--text); margin-bottom: 6px; line-height: 1.2;
+  }
+  .result-title {
+    font-size: 13px; color: var(--muted); margin-bottom: 4px;
+  }
+  .result-company {
+    font-size: 15px; color: var(--gold); font-weight: 500;
+    margin-bottom: 16px;
+  }
+  .result-id {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 1px;
+    color: rgba(201,168,76,0.4);
+  }
+  .result-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; color: var(--muted);
+    margin-top: 8px;
+  }
+
+  .result-bottom {
+    display: flex; gap: 1px;
+  }
+  .result-btn {
+    flex: 1; padding: 16px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+    border: none; cursor: pointer;
+  }
+  .result-btn.confirm {
+    background: var(--success); color: var(--black); font-weight: 700;
+  }
+  .result-btn.confirm.error-btn { background: var(--error); }
+  .result-btn.confirm.warning-btn { background: var(--warning); color: var(--black); }
+  .result-btn.dismiss {
+    background: var(--surface2); color: var(--muted);
+  }
+
+  /* ── GUESTLIST PAGE ── */
+  .list-wrap { padding: 16px 20px; }
+
+  .list-search {
+    display: flex; gap: 8px; margin-bottom: 16px;
+  }
+  .list-search input {
+    flex: 1; padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text); font-size: 14px;
+    font-family: 'Noto Sans TC', sans-serif; outline: none;
+  }
+  .list-search input:focus { border-color: var(--gold); }
+
+  .list-stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px; margin-bottom: 16px;
+  }
+  .stat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px 12px; text-align: center;
+  }
+  .stat-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 24px; font-weight: 700; color: var(--gold);
+    display: block; line-height: 1;
+  }
+  .stat-num.green { color: var(--success); }
+  .stat-num.red   { color: var(--error); }
+  .stat-lbl {
+    font-family: 'Space Mono', monospace;
+    font-size: 8px; letter-spacing: 1px; color: var(--muted);
+    text-transform: uppercase; margin-top: 4px; display: block;
+  }
+
+  .guest-list { display: flex; flex-direction: column; gap: 1px; }
+
+  .guest-item {
+    background: var(--surface);
+    padding: 16px;
+    display: flex; align-items: center; gap: 12px;
+    border-left: 3px solid transparent;
+    transition: background 0.2s;
+    cursor: pointer;
+  }
+  .guest-item.checked-in { border-left-color: var(--success); }
+  .guest-item.not-checked { border-left-color: rgba(255,255,255,0.05); }
+  .guest-item:active { background: var(--surface2); }
+
+  .guest-status {
+    width: 32px; height: 32px; flex-shrink: 0;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .guest-status.in  { background: rgba(76,175,132,0.15); border: 1px solid rgba(76,175,132,0.3); }
+  .guest-status.out { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
+
+  .guest-info { flex: 1; min-width: 0; }
+  .guest-name {
+    font-family: 'Noto Serif TC', serif;
+    font-size: 15px; font-weight: 700; color: var(--text);
+    margin-bottom: 2px;
+  }
+  .guest-sub {
+    font-size: 11px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .guest-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; color: var(--muted); text-align: right;
+    flex-shrink: 0;
+  }
+
+  /* ── UPLOAD PAGE ── */
+  .upload-wrap { padding: 20px; }
+
+  .upload-zone {
+    border: 2px dashed var(--border);
+    padding: 48px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    margin-bottom: 20px;
+  }
+  .upload-zone:hover { border-color: var(--gold); }
+  .upload-zone-icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-zone-text {
+    font-size: 14px; color: var(--muted); line-height: 1.7;
+  }
+  .upload-zone-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 1px; color: rgba(201,168,76,0.5);
+    margin-top: 8px;
+  }
+
+  .upload-preview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px; margin-bottom: 16px;
+    display: none;
+  }
+  .upload-preview.show { display: block; }
+  .preview-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 2px; color: var(--gold);
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .preview-row {
+    display: flex; justify-content: space-between;
+    font-size: 13px; color: var(--muted);
+    padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .preview-row:last-child { border-bottom: none; }
+  .preview-val { color: var(--text); }
+
+  .btn-load {
+    width: 100%; padding: 16px;
+    background: linear-gradient(135deg, var(--gold), #8B6914);
+    color: var(--black); font-family: 'Space Mono', monospace;
+    font-size: 12px; letter-spacing: 2px; font-weight: 700;
+    text-transform: uppercase; border: none; cursor: pointer;
+    display: none;
+  }
+  .btn-load.show { display: block; }
+  .btn-load:active { opacity: 0.85; }
+
+  .upload-instructions {
+    margin-top: 24px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .inst-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px; letter-spacing: 2px; color: var(--gold);
+    text-transform: uppercase;
+  }
+  .inst-body { padding: 16px; }
+  .inst-step {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 14px; font-size: 13px; color: var(--muted);
+    line-height: 1.6;
+  }
+  .inst-step:last-child { margin-bottom: 0; }
+  .inst-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px; color: var(--gold);
+    border: 1px solid var(--border);
+    width: 22px; height: 22px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+
+  /* ── DEMO DATA ── */
+  .demo-btn {
+    width: 100%; padding: 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted); font-family: 'Space Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    cursor: pointer; margin-top: 12px;
+  }
+  .demo-btn:active { background: rgba(255,255,255,0.03); }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 12px 20px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: var(--gold);
+    z-index: 300; opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+
+  /* Confetti */
+  .confetti-piece {
+    position: fixed;
+    width: 8px; height: 8px;
+    top: -10px;
+    animation: confetti-fall 1.5s ease-in forwards;
+    z-index: 250;
+    pointer-events: none;
+  }
+  @keyframes confetti-fall {
+    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-logo">IMS 2026 · Check-in</div>
+  <div class="header-count">
+    <span class="count-label">到場</span>
+    <div class="count-badge"><span id="checked-count">0</span> / <span id="total-count">0</span></div>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('scan')">掃描</button>
+  <button class="tab" onclick="switchTab('list')">名單</button>
+  <button class="tab" onclick="switchTab('upload')">匯入</button>
+</div>
+
+<!-- SCAN PAGE -->
+<div id="page-scan" class="page active">
+  <div class="scanner-wrap">
+    <div class="scanner-box">
+      <div id="qr-reader"></div>
+      <div class="scan-overlay" id="scan-overlay" style="display:none;">
+        <div class="scan-frame">
+          <div class="scan-corner tl"></div>
+          <div class="scan-corner tr"></div>
+          <div class="scan-corner bl"></div>
+          <div class="scan-corner br"></div>
+          <div class="scan-line"></div>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-scan-start" id="btn-start" onclick="startScanner()">開始掃描 QR Code</button>
+    <button class="btn-scan-stop" id="btn-stop" onclick="stopScanner()" style="display:none;">停止掃描</button>
+
+    <div class="manual-section">
+      <span class="manual-label">手動輸入 ID 或姓名</span>
+      <div class="manual-row">
+        <input type="text" class="manual-input" id="manual-input" placeholder="輸入姓名或 ID..." onkeydown="if(event.key==='Enter')manualCheckin()">
+        <button class="manual-btn" onclick="manualCheckin()">確認</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GUESTLIST PAGE -->
+<div id="page-list" class="page">
+  <div class="list-wrap">
+    <div class="list-stats">
+      <div class="stat-box">
+        <span class="stat-num" id="stat-total">0</span>
+        <span class="stat-lbl">總人數</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num green" id="stat-in">0</span>
+        <span class="stat-lbl">已到場</span>
+      </div>
+      <div class="stat-box">
+        <span class="stat-num red" id="stat-out">0</span>
+        <span class="stat-lbl">未到場</span>
+      </div>
+    </div>
+
+    <div class="list-search">
+      <input type="text" placeholder="搜尋姓名、公司..." oninput="filterGuests(this.value)">
+    </div>
+
+    <div class="guest-list" id="guest-list">
+      <div style="text-align:center;padding:48px 20px;">
+        <p style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;">尚未匯入名單</p>
+        <p style="font-size:12px;color:rgba(255,255,255,0.2);margin-top:8px;">請至「匯入」頁面上傳 CSV</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD PAGE -->
+<div id="page-upload" class="page">
+  <div class="upload-wrap">
+
+    <div class="upload-zone" onclick="document.getElementById('csv-file').click()">
+      <div class="upload-zone-icon">📋</div>
+      <div class="upload-zone-text">點擊上傳 Google Sheet CSV<br>或拖曳檔案至此</div>
+      <div class="upload-zone-hint">支援格式：.csv</div>
+    </div>
+    <input type="file" id="csv-file" accept=".csv" style="display:none;" onchange="handleCSV(this)">
+
+    <div class="upload-preview" id="upload-preview">
+      <div class="preview-title">預覽</div>
+      <div id="preview-content"></div>
+    </div>
+
+    <button class="btn-load" id="btn-load" onclick="loadGuestList()">載入名單</button>
+
+    <button class="demo-btn" onclick="loadDemoData()">載入示範資料（測試用）</button>
+
+    <div class="upload-instructions">
+      <div class="inst-header">使用說明</div>
+      <div class="inst-body">
+        <div class="inst-step">
+          <div class="inst-num">1</div>
+          <div>打開 Google Sheet（審核通過的名單）</div>
+        </div>
+        <div class="inst-step">
+          <div class="inst-num">2</div>
+          <div>「檔案」→「下載」→「CSV 格式」</div>
+        </div>
+        <div class="inst-step">
+          <div class="inst-num">3</div>
+          <div>上傳至此頁面，點「載入名單」</div>
+        </div>
+        <div class="inst-step">
+          <div class="inst-num">4</div>
+          <div>切換至「掃描」頁面，開始掃描來賓 QR Code</div>
+        </div>
+        <div class="inst-step">
+          <div class="inst-num">5</div>
+          <div>掃到 QR Code 後自動顯示來賓資訊並完成簽到</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT OVERLAY -->
+<div id="result-overlay">
+  <div class="result-card" id="result-card">
+    <div class="result-top">
+      <div class="result-status-icon" id="result-icon"></div>
+      <div class="result-status-text" id="result-status"></div>
+      <div class="result-name" id="result-name"></div>
+      <div class="result-title" id="result-title"></div>
+      <div class="result-company" id="result-company"></div>
+      <div class="result-id" id="result-id"></div>
+      <div class="result-time" id="result-time"></div>
+    </div>
+    <div class="result-bottom">
+      <button class="result-btn confirm" id="result-confirm" onclick="closeResult()">確認簽到</button>
+      <button class="result-btn dismiss" onclick="closeResult()">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+var guestList   = [];   // { id, name, title, company, checkedIn, checkTime }
+var html5QrCode = null;
+var scanning    = false;
+var lastScan    = "";
+var lastScanTime= 0;
+
+// ── TAB SWITCH ─────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  event.target.classList.add('active');
+  if (tab !== 'scan') stopScanner();
+}
+
+// ── SCANNER ────────────────────────────────────────────────
+function startScanner() {
+  if (guestList.length === 0) {
+    showToast('請先匯入來賓名單');
+    switchTab('upload');
+    document.querySelectorAll('.tab')[2].classList.add('active');
+    document.querySelectorAll('.tab')[0].classList.remove('active');
+    return;
+  }
+
+  html5QrCode = new Html5Qrcode("qr-reader");
+  Html5Qrcode.getCameras().then(function(cameras) {
+    if (!cameras || cameras.length === 0) {
+      showToast('找不到相機');
+      return;
+    }
+    // Prefer back camera
+    var camId = cameras[cameras.length - 1].id;
+    html5QrCode.start(
+      camId,
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      onScanSuccess,
+      function(err) {}
+    ).then(function() {
+      scanning = true;
+      document.getElementById('btn-start').style.display = 'none';
+      document.getElementById('btn-stop').style.display  = 'block';
+      document.getElementById('scan-overlay').style.display = 'flex';
+    }).catch(function(err) {
+      showToast('相機啟動失敗：' + err);
+    });
+  }).catch(function(err) {
+    showToast('無法取得相機權限');
+  });
+}
+
+function stopScanner() {
+  if (html5QrCode && scanning) {
+    html5QrCode.stop().then(function() {
+      scanning = false;
+      document.getElementById('btn-start').style.display = 'block';
+      document.getElementById('btn-stop').style.display  = 'none';
+      document.getElementById('scan-overlay').style.display = 'none';
+    }).catch(function(){});
+  }
+}
+
+function onScanSuccess(decodedText) {
+  // Debounce: ignore same QR within 3 seconds
+  var now = Date.now();
+  if (decodedText === lastScan && now - lastScanTime < 3000) return;
+  lastScan     = decodedText;
+  lastScanTime = now;
+
+  // Vibrate
+  if (navigator.vibrate) navigator.vibrate(100);
+
+  processCheckin(decodedText);
+}
+
+// ── CHECKIN LOGIC ──────────────────────────────────────────
+function processCheckin(input) {
+  input = input.trim();
+
+  // Parse QR Code format: IMS2026|uniqueId|name|company|title
+  var parts = input.split('|');
+  var uniqueId = '', name = '', company = '', title = '';
+
+  if (parts.length >= 3 && parts[0] === 'IMS2026') {
+    uniqueId = parts[1] || '';
+    name     = parts[2] || '';
+    company  = parts[3] || '';
+    title    = parts[4] || '';
+  } else {
+    // Raw text: try to match by name or ID
+    uniqueId = input;
+    name     = input;
+  }
+
+  // Find guest in list
+  var guest = findGuest(uniqueId, name);
+
+  if (!guest) {
+    showResult('error', null, {
+      name: name || input,
+      company: company || '—',
+      title: title || '',
+      id: uniqueId
+    });
+    return;
+  }
+
+  if (guest.checkedIn) {
+    showResult('warning', guest, null);
+    return;
+  }
+
+  // Mark as checked in
+  guest.checkedIn = true;
+  guest.checkTime = new Date();
+  updateCounts();
+  renderGuestList(document.querySelector('.list-search input') ? document.querySelector('.list-search input').value : '');
+  showResult('success', guest, null);
+  launchConfetti();
+}
+
+function findGuest(id, name) {
+  // Match by unique ID first
+  for (var i = 0; i < guestList.length; i++) {
+    if (guestList[i].id && guestList[i].id.toLowerCase() === id.toLowerCase()) {
+      return guestList[i];
+    }
+  }
+  // Match by name
+  var nameLower = name.toLowerCase().trim();
+  for (var i = 0; i < guestList.length; i++) {
+    if (guestList[i].name.toLowerCase().trim() === nameLower) {
+      return guestList[i];
+    }
+  }
+  return null;
+}
+
+function manualCheckin() {
+  var val = document.getElementById('manual-input').value.trim();
+  if (!val) return;
+  processCheckin(val);
+  document.getElementById('manual-input').value = '';
+}
+
+// ── RESULT OVERLAY ─────────────────────────────────────────
+function showResult(type, guest, raw) {
+  var overlay = document.getElementById('result-overlay');
+  var card    = document.getElementById('result-card');
+
+  card.className = 'result-card ' + type;
+
+  var icon    = document.getElementById('result-icon');
+  var status  = document.getElementById('result-status');
+  var nameEl  = document.getElementById('result-name');
+  var titleEl = document.getElementById('result-title');
+  var coEl    = document.getElementById('result-company');
+  var idEl    = document.getElementById('result-id');
+  var timeEl  = document.getElementById('result-time');
+  var confirmBtn = document.getElementById('result-confirm');
+
+  if (type === 'success') {
+    icon.textContent    = '✓';
+    status.textContent  = '簽到成功';
+    nameEl.textContent  = guest.name;
+    titleEl.textContent = guest.title  || '';
+    coEl.textContent    = guest.company || '';
+    idEl.textContent    = guest.id     || '';
+    timeEl.textContent  = formatTime(guest.checkTime);
+    confirmBtn.className = 'result-btn confirm';
+    confirmBtn.textContent = '確認簽到';
+
+  } else if (type === 'warning') {
+    icon.textContent    = '!';
+    status.textContent  = '已完成簽到';
+    nameEl.textContent  = guest.name;
+    titleEl.textContent = guest.title  || '';
+    coEl.textContent    = guest.company || '';
+    idEl.textContent    = guest.id     || '';
+    timeEl.textContent  = guest.checkTime ? '原簽到時間：' + formatTime(guest.checkTime) : '';
+    confirmBtn.className = 'result-btn confirm warning-btn';
+    confirmBtn.textContent = '知道了';
+
+  } else {
+    icon.textContent    = '✕';
+    status.textContent  = '查無此人';
+    nameEl.textContent  = raw.name || '未知';
+    titleEl.textContent = raw.title || '';
+    coEl.textContent    = raw.company || '';
+    idEl.textContent    = raw.id || '';
+    timeEl.textContent  = '不在邀請名單中';
+    confirmBtn.className = 'result-btn confirm error-btn';
+    confirmBtn.textContent = '關閉';
+  }
+
+  overlay.classList.add('show');
+}
+
+function closeResult() {
+  document.getElementById('result-overlay').classList.remove('show');
+}
+
+// ── CSV IMPORT ─────────────────────────────────────────────
+var parsedCSVGuests = [];
+
+function handleCSV(input) {
+  var file = input.files[0];
+  if (!file) return;
+
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result;
+    parsedCSVGuests = parseCSV(text);
+
+    var preview = document.getElementById('upload-preview');
+    var content = document.getElementById('preview-content');
+    preview.classList.add('show');
+    content.innerHTML =
+      '<div class="preview-row"><span>檔案名稱</span><span class="preview-val">' + file.name + '</span></div>' +
+      '<div class="preview-row"><span>來賓人數</span><span class="preview-val">' + parsedCSVGuests.length + ' 人</span></div>' +
+      '<div class="preview-row"><span>前3筆預覽</span><span class="preview-val">' +
+        parsedCSVGuests.slice(0, 3).map(function(g){ return g.name; }).join('、') +
+      '</span></div>';
+
+    document.getElementById('btn-load').classList.add('show');
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text) {
+  var lines  = text.split('\n').filter(function(l){ return l.trim(); });
+  var header = lines[0].split(',').map(function(h){ return h.trim().replace(/^"|"$/g,''); });
+
+  // Find column indices
+  var colName    = findCol(header, ['中文姓名', '姓名', 'name']);
+  var colTitle   = findCol(header, ['職稱', 'title']);
+  var colCompany = findCol(header, ['公司名稱', '公司', 'company']);
+  var colEmail   = findCol(header, ['Email', 'email', '電子郵件']);
+  var colId      = findCol(header, ['唯一ID', 'ID', 'id', 'unique']);
+  var colStatus  = findCol(header, ['審核狀態', 'status', '狀態']);
+
+  var guests = [];
+  for (var i = 1; i < lines.length; i++) {
+    var cols = splitCSVLine(lines[i]);
+    var name = cols[colName] ? cols[colName].trim() : '';
+    if (!name) continue;
+
+    // Only include approved guests if status column exists
+    if (colStatus >= 0) {
+      var status = cols[colStatus] ? cols[colStatus].trim() : '';
+      if (status && status !== '審核通過') continue;
+    }
+
+    guests.push({
+      id:        cols[colId] ? cols[colId].trim() : ('ROW' + i),
+      name:      name,
+      title:     cols[colTitle]   ? cols[colTitle].trim()   : '',
+      company:   cols[colCompany] ? cols[colCompany].trim() : '',
+      email:     cols[colEmail]   ? cols[colEmail].trim()   : '',
+      checkedIn: false,
+      checkTime: null,
+    });
+  }
+  return guests;
+}
+
+function findCol(header, keywords) {
+  for (var k = 0; k < keywords.length; k++) {
+    for (var i = 0; i < header.length; i++) {
+      if (header[i].indexOf(keywords[k]) >= 0) return i;
+    }
+  }
+  return -1;
+}
+
+function splitCSVLine(line) {
+  var result = [], cur = '', inQuote = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (c === '"') { inQuote = !inQuote; }
+    else if (c === ',' && !inQuote) { result.push(cur); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur);
+  return result;
+}
+
+function loadGuestList() {
+  if (!parsedCSVGuests.length) return;
+  guestList = parsedCSVGuests;
+  updateCounts();
+  renderGuestList('');
+  showToast('已載入 ' + guestList.length + ' 位來賓');
+  switchTab('list');
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.querySelectorAll('.tab')[2].classList.remove('active');
+}
+
+// ── DEMO DATA ──────────────────────────────────────────────
+function loadDemoData() {
+  guestList = [
+    { id:'IMS26-1唐-A1B2', name:'唐昀萍',  title:'行銷總監',     company:'VMFIVE 第五代虛擬科技', checkedIn:false, checkTime:null },
+    { id:'IMS26-2王-C3D4', name:'王志明',  title:'執行長',       company:'Ocard 奧理科技',         checkedIn:false, checkTime:null },
+    { id:'IMS26-3李-E5F6', name:'李美華',  title:'業務副總',     company:'Justar 數聚國際',         checkedIn:false, checkTime:null },
+    { id:'IMS26-4陳-G7H8', name:'陳建宏',  title:'CTO',          company:'AWS Taiwan',              checkedIn:false, checkTime:null },
+    { id:'IMS26-5林-I9J0', name:'林怡君',  title:'數位行銷經理', company:'某品牌股份有限公司',      checkedIn:false, checkTime:null },
+    { id:'IMS26-6張-K1L2', name:'張元溢',  title:'執行長',       company:'Justar 數聚國際',         checkedIn:false, checkTime:null },
+    { id:'IMS26-7吳-M3N4', name:'吳宗達',  title:'品牌策略總監', company:'4A 廣告代理商',           checkedIn:false, checkTime:null },
+    { id:'IMS26-8黃-O5P6', name:'黃佳琪',  title:'電商負責人',   company:'零售科技有限公司',        checkedIn:false, checkTime:null },
+  ];
+  updateCounts();
+  renderGuestList('');
+  showToast('示範資料已載入（' + guestList.length + ' 位）');
+  switchTab('list');
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.querySelectorAll('.tab')[2].classList.remove('active');
+}
+
+// ── RENDER GUEST LIST ──────────────────────────────────────
+function renderGuestList(filter) {
+  var list = document.getElementById('guest-list');
+  var f = (filter || '').toLowerCase().trim();
+
+  var shown = guestList.filter(function(g) {
+    if (!f) return true;
+    return (g.name    + g.company + g.title + g.id).toLowerCase().indexOf(f) >= 0;
+  });
+
+  // Sort: not checked in first
+  shown.sort(function(a, b) {
+    if (a.checkedIn === b.checkedIn) return a.name.localeCompare(b.name);
+    return a.checkedIn ? 1 : -1;
+  });
+
+  if (!shown.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;font-size:13px;color:var(--muted);">找不到符合的來賓</div>';
+    return;
+  }
+
+  list.innerHTML = shown.map(function(g) {
+    var timeStr = g.checkTime ? formatTime(g.checkTime) : '';
+    return '<div class="guest-item ' + (g.checkedIn ? 'checked-in' : 'not-checked') + '" onclick="toggleCheckin(\'' + g.id + '\')">' +
+      '<div class="guest-status ' + (g.checkedIn ? 'in' : 'out') + '">' + (g.checkedIn ? '✓' : '—') + '</div>' +
+      '<div class="guest-info">' +
+        '<div class="guest-name">' + g.name + '</div>' +
+        '<div class="guest-sub">' + (g.title ? g.title + '　' : '') + g.company + '</div>' +
+      '</div>' +
+      '<div class="guest-time">' + timeStr + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function toggleCheckin(id) {
+  var g = guestList.find(function(x){ return x.id === id; });
+  if (!g) return;
+  g.checkedIn = !g.checkedIn;
+  g.checkTime = g.checkedIn ? new Date() : null;
+  updateCounts();
+  renderGuestList(document.querySelector('.list-search input').value);
+  showToast(g.checkedIn ? (g.name + ' 已簽到') : (g.name + ' 取消簽到'));
+}
+
+function filterGuests(val) {
+  renderGuestList(val);
+}
+
+// ── COUNTS ─────────────────────────────────────────────────
+function updateCounts() {
+  var total   = guestList.length;
+  var checked = guestList.filter(function(g){ return g.checkedIn; }).length;
+
+  document.getElementById('checked-count').textContent = checked;
+  document.getElementById('total-count').textContent   = total;
+  document.getElementById('stat-total').textContent    = total;
+  document.getElementById('stat-in').textContent       = checked;
+  document.getElementById('stat-out').textContent      = total - checked;
+}
+
+// ── HELPERS ────────────────────────────────────────────────
+function formatTime(d) {
+  if (!d) return '';
+  var h = d.getHours().toString().padStart(2,'0');
+  var m = d.getMinutes().toString().padStart(2,'0');
+  return h + ':' + m;
+}
+
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+function launchConfetti() {
+  var colors = ['#C9A84C','#E8C96A','#4CAF84','#F0EDE8','#8B6914'];
+  for (var i = 0; i < 24; i++) {
+    var el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.background = colors[Math.floor(Math.random() * colors.length)];
+    el.style.animationDelay = Math.random() * 0.4 + 's';
+    el.style.borderRadius   = Math.random() > 0.5 ? '50%' : '0';
+    document.body.appendChild(el);
+    setTimeout(function(e){ e.remove(); }, 2000, el);
+  }
+}
+</script>
+</body>
+</html>

@@ -4,7 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>IMS 2026｜現場 Check-in</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js">
+// ── AUTO CHECKIN FROM URL PARAMS ──────────────────────────
+// 當手機掃 QR Code 開啟此頁面時，自動帶入參數完成簽到
+window.addEventListener('load', function() {
+  var params = new URLSearchParams(window.location.search);
+  var id      = params.get('id')      || '';
+  var name    = params.get('name')    || '';
+  var company = params.get('company') || '';
+  var title   = params.get('title')   || '';
+
+  if (!id && !name) return; // 沒有參數，正常開啟
+
+  // 等名單載入（最多等 3 秒）
+  var attempts = 0;
+  var timer = setInterval(function() {
+    attempts++;
+
+    if (guestList.length > 0) {
+      // 名單已載入，直接簽到
+      clearInterval(timer);
+      var qrString = 'IMS2026|' + id + '|' + name + '|' + company + '|' + title;
+      processCheckin(qrString);
+      return;
+    }
+
+    if (attempts >= 30) {
+      // 名單還沒載入，顯示提示
+      clearInterval(timer);
+      // 建立暫時的來賓資料讓其顯示
+      if (name) {
+        showResult('error', null, { name: name, company: company, title: title, id: id });
+        // 顯示提示訊息
+        document.getElementById('result-time').textContent = '請先匯入名單再掃描';
+      }
+    }
+  }, 100);
+});
+
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1076,6 +1114,44 @@ function launchConfetti() {
     setTimeout(function(e){ e.remove(); }, 2000, el);
   }
 }
+
+// ── AUTO CHECKIN FROM URL PARAMS ──────────────────────────
+// 當手機掃 QR Code 開啟此頁面時，自動帶入參數完成簽到
+window.addEventListener('load', function() {
+  var params = new URLSearchParams(window.location.search);
+  var id      = params.get('id')      || '';
+  var name    = params.get('name')    || '';
+  var company = params.get('company') || '';
+  var title   = params.get('title')   || '';
+
+  if (!id && !name) return; // 沒有參數，正常開啟
+
+  // 等名單載入（最多等 3 秒）
+  var attempts = 0;
+  var timer = setInterval(function() {
+    attempts++;
+
+    if (guestList.length > 0) {
+      // 名單已載入，直接簽到
+      clearInterval(timer);
+      var qrString = 'IMS2026|' + id + '|' + name + '|' + company + '|' + title;
+      processCheckin(qrString);
+      return;
+    }
+
+    if (attempts >= 30) {
+      // 名單還沒載入，顯示提示
+      clearInterval(timer);
+      // 建立暫時的來賓資料讓其顯示
+      if (name) {
+        showResult('error', null, { name: name, company: company, title: title, id: id });
+        // 顯示提示訊息
+        document.getElementById('result-time').textContent = '請先匯入名單再掃描';
+      }
+    }
+  }, 100);
+});
+
 </script>
 </body>
 </html>

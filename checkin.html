@@ -42,6 +42,63 @@ window.addEventListener('load', function() {
   }, 100);
 });
 
+
+// ── LOAD FROM GOOGLE SHEET ─────────────────────────────────
+function loadFromGoogleSheet() {
+  showToast('正在從 Google Sheet 載入名單...');
+
+  fetch(WEBAPP_URL + '?action=getlist')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.guests && data.guests.length > 0) {
+        guestList = data.guests.map(function(g) {
+          return {
+            id:        g.id        || '',
+            name:      g.name      || '',
+            title:     g.title     || '',
+            company:   g.company   || '',
+            checkedIn: g.checkedIn || false,
+            checkTime: g.checkTime ? new Date(g.checkTime) : null,
+          };
+        });
+        updateCounts();
+        renderGuestList('');
+        showToast('已載入 ' + guestList.length + ' 位來賓');
+        switchTab('list');
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.querySelectorAll('.tab')[2].classList.remove('active');
+      } else {
+        showToast('Google Sheet 尚無審核通過名單');
+      }
+    })
+    .catch(function(err) {
+      showToast('載入失敗，請上傳 CSV');
+    });
+}
+
+// Auto-refresh guest list every 30 seconds
+setInterval(function() {
+  if (guestList.length > 0 && syncMode) {
+    fetch(WEBAPP_URL + '?action=getlist')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.guests) {
+          // Update checkin status from sheet
+          data.guests.forEach(function(g) {
+            var local = findGuest(g.id, g.name);
+            if (local && g.checkedIn && !local.checkedIn) {
+              local.checkedIn = true;
+              local.checkTime = g.checkTime ? new Date(g.checkTime) : new Date();
+            }
+          });
+          updateCounts();
+          var filter = document.querySelector('.list-search input');
+          renderGuestList(filter ? filter.value : '');
+        }
+      }).catch(function(){});
+  }
+}, 30000);
+
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Serif+TC:wght@600;700;900&family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -563,7 +620,8 @@ window.addEventListener('load', function() {
 <!-- HEADER -->
 <header>
   <div class="header-logo">IMS 2026 · Check-in</div>
-  <div class="header-count">
+  <div class="header-count" style="display:flex;align-items:center;gap:8px;">
+    <div id="sync-indicator" style="width:8px;height:8px;border-radius:50%;background:#4CAF84;" title="即時同步開啟"></div>
     <span class="count-label">到場</span>
     <div class="count-badge"><span id="checked-count">0</span> / <span id="total-count">0</span></div>
   </div>
@@ -654,6 +712,7 @@ window.addEventListener('load', function() {
 
     <button class="btn-load" id="btn-load" onclick="loadGuestList()">載入名單</button>
 
+    <button class="btn-load show" onclick="loadFromGoogleSheet()" style="background:linear-gradient(135deg,#4CAF84,#2E8B57);margin-bottom:12px;">從 Google Sheet 即時載入名單</button>
     <button class="demo-btn" onclick="loadDemoData()">載入示範資料（測試用）</button>
 
     <div class="upload-instructions">
@@ -707,6 +766,11 @@ window.addEventListener('load', function() {
 <div id="toast"></div>
 
 <script>
+
+// ── GOOGLE SHEET SYNC CONFIG ──────────────────────────────
+var WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbybwcwjkQY5vMZ4J7384d1q2K-GHsoxm9EK-OUiIsvzenNvApAbSaoHbuFjXQSvVzajTw/exec';
+var syncMode   = true; // true = 即時同步 Google Sheet
+
 // ── STATE ──────────────────────────────────────────────────
 var guestList   = [];   // { id, name, title, company, checkedIn, checkTime }
 var html5QrCode = null;
@@ -787,40 +851,104 @@ function onScanSuccess(decodedText) {
 function processCheckin(input) {
   input = input.trim();
 
-  // Parse QR Code format: IMS2026|uniqueId|name|company|title
-  var parts = input.split('|');
+  // Parse QR Code - support both URL format and raw format
   var uniqueId = '', name = '', company = '', title = '';
 
-  if (parts.length >= 3 && parts[0] === 'IMS2026') {
-    uniqueId = parts[1] || '';
-    name     = parts[2] || '';
-    company  = parts[3] || '';
-    title    = parts[4] || '';
-  } else {
-    // Raw text: try to match by name or ID
-    uniqueId = input;
-    name     = input;
+  // URL format: checkin.html?id=xxx&name=xxx...
+  if (input.indexOf('checkin.html') >= 0 || input.indexOf('?id=') >= 0) {
+    var urlParts = input.split('?');
+    if (urlParts.length > 1) {
+      var params = new URLSearchParams('?' + urlParts[1]);
+      uniqueId = params.get('id')      || '';
+      name     = params.get('name')    || '';
+      company  = params.get('company') || '';
+      title    = params.get('title')   || '';
+    }
+  }
+  // Raw format: IMS2026|uniqueId|name|company|title
+  else {
+    var parts = input.split('|');
+    if (parts.length >= 3 && parts[0] === 'IMS2026') {
+      uniqueId = parts[1] || '';
+      name     = parts[2] || '';
+      company  = parts[3] || '';
+      title    = parts[4] || '';
+    } else {
+      uniqueId = input;
+      name     = input;
+    }
   }
 
-  // Find guest in list
-  var guest = findGuest(uniqueId, name);
-
-  if (!guest) {
-    showResult('error', null, {
-      name: name || input,
-      company: company || '—',
-      title: title || '',
-      id: uniqueId
-    });
+  // If sync mode, use Google Sheet
+  if (syncMode && WEBAPP_URL) {
+    processCheckinOnline(uniqueId, name, company, title);
     return;
   }
 
+  // Offline mode: use local list
+  processCheckinOffline(uniqueId, name, company, title);
+}
+
+// ── ONLINE CHECKIN (Google Sheet sync) ────────────────────
+function processCheckinOnline(uniqueId, name, company, title) {
+  // Show loading state
+  showToast('驗證中...');
+
+  var url = WEBAPP_URL + '?action=checkin&id=' + encodeURIComponent(uniqueId) + '&name=' + encodeURIComponent(name);
+
+  fetch(url)
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.status === 'success') {
+        // Update local list too
+        var guest = findGuest(uniqueId, name);
+        if (!guest) {
+          // Add to local list if not found
+          guest = { id: uniqueId, name: data.name || name, title: data.title || title, company: data.company || company, checkedIn: true, checkTime: new Date() };
+          guestList.push(guest);
+        } else {
+          guest.checkedIn = true;
+          guest.checkTime = new Date();
+        }
+        updateCounts();
+        renderGuestList('');
+        showResult('success', guest, null);
+        launchConfetti();
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
+      } else if (data.status === 'already') {
+        var guest = findGuest(uniqueId, name) || { id: uniqueId, name: data.name || name, title: data.title || title, company: data.company || company, checkedIn: true, checkTime: new Date() };
+        showResult('warning', guest, null);
+        if (navigator.vibrate) navigator.vibrate(300);
+
+      } else if (data.status === 'notfound') {
+        showResult('error', null, { name: name || uniqueId, company: company, title: title, id: uniqueId });
+        if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+
+      } else {
+        showToast('連線錯誤，改用離線模式');
+        processCheckinOffline(uniqueId, name, company, title);
+      }
+    })
+    .catch(function(err) {
+      showToast('網路錯誤，改用離線模式');
+      processCheckinOffline(uniqueId, name, company, title);
+    });
+}
+
+// ── OFFLINE CHECKIN (local only) ──────────────────────────
+function processCheckinOffline(uniqueId, name, company, title) {
+  var guest = findGuest(uniqueId, name);
+
+  if (!guest) {
+    showResult('error', null, { name: name || uniqueId, company: company || '—', title: title || '', id: uniqueId });
+    return;
+  }
   if (guest.checkedIn) {
     showResult('warning', guest, null);
     return;
   }
 
-  // Mark as checked in
   guest.checkedIn = true;
   guest.checkTime = new Date();
   updateCounts();
@@ -1151,6 +1279,63 @@ window.addEventListener('load', function() {
     }
   }, 100);
 });
+
+
+// ── LOAD FROM GOOGLE SHEET ─────────────────────────────────
+function loadFromGoogleSheet() {
+  showToast('正在從 Google Sheet 載入名單...');
+
+  fetch(WEBAPP_URL + '?action=getlist')
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.guests && data.guests.length > 0) {
+        guestList = data.guests.map(function(g) {
+          return {
+            id:        g.id        || '',
+            name:      g.name      || '',
+            title:     g.title     || '',
+            company:   g.company   || '',
+            checkedIn: g.checkedIn || false,
+            checkTime: g.checkTime ? new Date(g.checkTime) : null,
+          };
+        });
+        updateCounts();
+        renderGuestList('');
+        showToast('已載入 ' + guestList.length + ' 位來賓');
+        switchTab('list');
+        document.querySelectorAll('.tab')[1].classList.add('active');
+        document.querySelectorAll('.tab')[2].classList.remove('active');
+      } else {
+        showToast('Google Sheet 尚無審核通過名單');
+      }
+    })
+    .catch(function(err) {
+      showToast('載入失敗，請上傳 CSV');
+    });
+}
+
+// Auto-refresh guest list every 30 seconds
+setInterval(function() {
+  if (guestList.length > 0 && syncMode) {
+    fetch(WEBAPP_URL + '?action=getlist')
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.guests) {
+          // Update checkin status from sheet
+          data.guests.forEach(function(g) {
+            var local = findGuest(g.id, g.name);
+            if (local && g.checkedIn && !local.checkedIn) {
+              local.checkedIn = true;
+              local.checkTime = g.checkTime ? new Date(g.checkTime) : new Date();
+            }
+          });
+          updateCounts();
+          var filter = document.querySelector('.list-search input');
+          renderGuestList(filter ? filter.value : '');
+        }
+      }).catch(function(){});
+  }
+}, 30000);
 
 </script>
 </body>
